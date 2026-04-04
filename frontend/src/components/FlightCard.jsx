@@ -1,106 +1,71 @@
 import React, { useState } from "react"
-
-const labelColors = {
-  Book:   { bg: "#dcfce7", text: "#166534", border: "#bbf7d0" },
-  Wait:   { bg: "#fef9c3", text: "#854d0e", border: "#fef08a" },
-  Ignore: { bg: "#fee2e2", text: "#991b1b", border: "#fecaca" },
-}
-const scoreColor = (s) => s >= 70 ? "#16a34a" : s >= 45 ? "#ca8a04" : "#dc2626"
+const LABEL = { Book: { bg: "var(--green-bg)", text: "var(--green)", border: "#b2dfc4", dot: "#1a7a4a" }, Wait: { bg: "var(--amber-bg)", text: "var(--amber)", border: "#f0d898", dot: "#c9a84c" }, Ignore: { bg: "var(--red-bg)", text: "var(--red)", border: "#f5c0c0", dot: "#9a1f1f" } }
+const sc = (s) => s >= 70 ? "var(--green)" : s >= 45 ? "var(--amber)" : "var(--red)"
 const fmt = (iso) => { try { return new Date(iso).toLocaleTimeString("en-GB", { hour: "2-digit", minute: "2-digit" }) } catch { return "--" } }
-const dur = (m) => m ? `${Math.floor(m / 60)}h ${m % 60}m` : ""
-
-export default function FlightCard({ flight: f, rank }) {
+const dur = (m) => { if (!m) return ""; const h = Math.floor(m/60), mn = m%60; return `${h}h${mn > 0 ? ` ${mn}m` : ""}` }
+function Tag({ children, color }) {
+  const c = { green: { bg: "var(--green-bg)", text: "var(--green)", border: "#b2dfc4" }, red: { bg: "var(--red-bg)", text: "var(--red)", border: "#f5c0c0" }, neutral: { bg: "#f0f0ec", text: "var(--muted)", border: "var(--border)" } }[color] || { bg: "#f0f0ec", text: "var(--muted)", border: "var(--border)" }
+  return <span style={{ fontSize: 12, padding: "4px 10px", borderRadius: 100, background: c.bg, color: c.text, border: `1px solid ${c.border}`, fontWeight: 500 }}>{children}</span>
+}
+export default function FlightCard({ flight: f, rank, animClass }) {
   const [open, setOpen] = useState(false)
-  const lc = labelColors[f.label] || labelColors.Wait
-
+  const lc = LABEL[f.label] || LABEL.Wait
+  const bookingUrl = `https://www.google.com/travel/flights?q=${encodeURIComponent(`${f.origin} to ${f.destination} ${f.departureTime?.split("T")[0] || ""}`)}`
   return (
-    <div style={{ background: "#fff", borderRadius: 14, marginBottom: 14, border: `1px solid ${f.label === "Book" ? "#bbf7d0" : "#e8e8e4"}`, overflow: "hidden" }}>
-      <div style={{ padding: "20px 24px" }}>
-
-        {/* Main row */}
-        <div style={{ display: "flex", alignItems: "center", justifyContent: "space-between", gap: 12 }}>
-
-          {/* Airline + label */}
-          <div style={{ minWidth: 120 }}>
-            <div style={{ fontSize: 17, fontWeight: 600, color: "#111" }}>{f.airline}</div>
-            <div style={{ fontSize: 13, color: "#888", marginTop: 2 }}>{f.flightNumber}</div>
-            <div style={{ display: "inline-block", marginTop: 6, fontSize: 12, fontWeight: 600, padding: "3px 10px", borderRadius: 20, background: lc.bg, color: lc.text, border: `1px solid ${lc.border}` }}>{f.label}</div>
-          </div>
-
-          {/* Departure */}
-          <div style={{ textAlign: "center" }}>
-            <div style={{ fontSize: 22, fontWeight: 700, color: "#111" }}>{fmt(f.departureTime)}</div>
-            <div style={{ fontSize: 12, color: "#888", marginTop: 2 }}>{f.origin}</div>
-          </div>
-
-          {/* Route */}
-          <div style={{ flex: 1, display: "flex", flexDirection: "column", alignItems: "center", gap: 3 }}>
-            <div style={{ fontSize: 12, color: "#888" }}>
-              {f.stops === 0 ? "Direct" : `${f.stops} stop${f.stops > 1 ? "s" : ""}${f.stopCity ? ` via ${f.stopCity}` : ""}`}
+    <div className={animClass} style={{ background: "var(--white)", borderRadius: "var(--radius)", marginBottom: 16, border: `1px solid ${f.label === "Book" ? "#b2dfc4" : "var(--border)"}`, boxShadow: f.label === "Book" ? "0 4px 20px rgba(26,122,74,0.1)" : "var(--shadow)", overflow: "hidden", transition: "transform 0.15s" }} onMouseOver={e => e.currentTarget.style.transform = "translateY(-2px)"} onMouseOut={e => e.currentTarget.style.transform = ""}>
+      {f.label === "Book" && <div style={{ height: 3, background: "linear-gradient(90deg, var(--green), #4abe82)" }} />}
+      <div style={{ padding: "24px 28px" }}>
+        <div style={{ display: "flex", alignItems: "center", gap: 16, flexWrap: "wrap" }}>
+          <div style={{ minWidth: 130 }}>
+            <div style={{ fontSize: 11, color: "var(--muted)", marginBottom: 4 }}>#{rank}</div>
+            <div style={{ fontSize: 18, fontWeight: 600 }}>{f.airline}</div>
+            <div style={{ fontSize: 12, color: "var(--muted)", marginTop: 2 }}>{f.flightNumber}</div>
+            <div style={{ display: "inline-flex", alignItems: "center", gap: 5, marginTop: 8, fontSize: 12, fontWeight: 600, padding: "4px 10px", borderRadius: 100, background: lc.bg, color: lc.text, border: `1px solid ${lc.border}` }}>
+              <span style={{ width: 6, height: 6, borderRadius: "50%", background: lc.dot, display: "inline-block" }} />{f.label}
             </div>
-            <div style={{ width: "100%", height: 1, background: "#ddd" }} />
-            <div style={{ fontSize: 12, color: "#aaa" }}>{dur(f.durationMinutes)}</div>
           </div>
-
-          {/* Arrival */}
-          <div style={{ textAlign: "center" }}>
-            <div style={{ fontSize: 22, fontWeight: 700, color: "#111" }}>{fmt(f.arrivalTime)}</div>
-            <div style={{ fontSize: 12, color: "#888", marginTop: 2 }}>{f.destination}</div>
+          <div style={{ flex: 1, display: "flex", alignItems: "center", gap: 12, minWidth: 260 }}>
+            <div style={{ textAlign: "center" }}>
+              <div style={{ fontSize: 26, fontWeight: 700, letterSpacing: -0.5 }}>{fmt(f.departureTime)}</div>
+              <div style={{ fontSize: 12, color: "var(--muted)", marginTop: 2 }}>{f.origin}</div>
+            </div>
+            <div style={{ flex: 1, textAlign: "center" }}>
+              <div style={{ fontSize: 11, color: "var(--muted)", marginBottom: 4 }}>{f.stops === 0 ? "Direct" : `${f.stops} stop${f.stops > 1 ? "s" : ""}${f.stopCity ? ` · ${f.stopCity}` : ""}`}</div>
+              <div style={{ height: 1, background: "var(--border)", position: "relative" }}><div style={{ position: "absolute", right: -4, top: -4, width: 8, height: 8, borderTop: "1px solid var(--muted)", borderRight: "1px solid var(--muted)", transform: "rotate(45deg)" }} /></div>
+              <div style={{ fontSize: 11, color: "var(--muted)", marginTop: 4 }}>{dur(f.durationMinutes)}</div>
+            </div>
+            <div style={{ textAlign: "center" }}>
+              <div style={{ fontSize: 26, fontWeight: 700, letterSpacing: -0.5 }}>{fmt(f.arrivalTime)}</div>
+              <div style={{ fontSize: 12, color: "var(--muted)", marginTop: 2 }}>{f.destination}</div>
+            </div>
           </div>
-
-          {/* Price */}
-          <div style={{ textAlign: "right", minWidth: 100 }}>
-            <div style={{ fontSize: 22, fontWeight: 700, color: "#111" }}>${Math.round(f.pricePerAdult)}</div>
-            <div style={{ fontSize: 12, color: "#888" }}>per adult</div>
-            {f.pricePerChild && f.pricePerChild < f.pricePerAdult && (
-              <div style={{ fontSize: 12, color: "#16a34a", marginTop: 2 }}>${Math.round(f.pricePerChild)} per child</div>
-            )}
-            <div style={{ fontSize: 12, color: "#aaa", marginTop: 2 }}>${Math.round(f.totalPrice)} total</div>
+          <div style={{ textAlign: "right", minWidth: 110 }}>
+            <div style={{ fontSize: 28, fontWeight: 700, letterSpacing: -0.5 }}>${Math.round(f.pricePerAdult)}</div>
+            <div style={{ fontSize: 12, color: "var(--muted)" }}>per adult</div>
+            {f.pricePerChild && f.pricePerChild < f.pricePerAdult && <div style={{ fontSize: 12, color: "var(--green)", marginTop: 2, fontWeight: 500 }}>${Math.round(f.pricePerChild)} per child</div>}
+            <div style={{ fontSize: 12, color: "var(--muted)", marginTop: 2 }}>${Math.round(f.totalPrice)} total</div>
           </div>
-
-          {/* Score */}
-          <div style={{ textAlign: "center", minWidth: 52 }}>
-            <div style={{ fontSize: 28, fontWeight: 700, color: scoreColor(f.dealScore) }}>{Math.round(f.dealScore)}</div>
-            <div style={{ fontSize: 11, color: "#aaa", textTransform: "uppercase", letterSpacing: 0.5 }}>score</div>
+          <div style={{ textAlign: "center", minWidth: 60, padding: "8px 12px", background: "var(--cream)", borderRadius: 12 }}>
+            <div style={{ fontSize: 30, fontWeight: 700, color: sc(f.dealScore), lineHeight: 1 }}>{Math.round(f.dealScore)}</div>
+            <div style={{ fontSize: 10, color: "var(--muted)", textTransform: "uppercase", letterSpacing: 0.5, marginTop: 2 }}>score</div>
           </div>
-
-          <div style={{ fontSize: 11, color: "#ccc" }}>#{rank}</div>
         </div>
-
-        {/* Tags row */}
-        <div style={{ marginTop: 14, paddingTop: 12, borderTop: "1px solid #f0f0ec", display: "flex", flexWrap: "wrap", gap: 10 }}>
-          <span style={{ fontSize: 13, color: "#555" }}>
-            {f.baggageIncluded ? "[bag]" : "[!]"} {f.baggageDetails}
-          </span>
-          {f.seatsTogether === true && (
-            <span style={{ fontSize: 13, color: "#16a34a" }}>[ok] Family seating guaranteed</span>
-          )}
-          {f.seatsTogether === false && (
-            <span style={{ fontSize: 13, color: "#dc2626" }}>[!] Must pay to sit together</span>
-          )}
-          {f.seatsAvailable > 0 && (
-            <span style={{ fontSize: 13, color: f.seatsAvailable <= 3 ? "#dc2626" : "#888" }}>
-              {f.seatsAvailable <= 3 ? `Only ${f.seatsAvailable} seats left` : `${f.seatsAvailable} seats available`}
-            </span>
-          )}
+        <div style={{ marginTop: 16, paddingTop: 16, borderTop: "1px solid var(--border)", display: "flex", flexWrap: "wrap", gap: 8 }}>
+          <Tag color={f.baggageIncluded ? "green" : "red"}>{f.baggageIncluded ? "Baggage included" : "No checked bag"} — {f.baggageDetails}</Tag>
+          {f.seatsTogether === true && <Tag color="green">Family seating guaranteed</Tag>}
+          {f.seatsTogether === false && <Tag color="red">Must pay to sit together</Tag>}
+          {f.seatsAvailable > 0 && <Tag color={f.seatsAvailable <= 3 ? "red" : "neutral"}>{f.seatsAvailable <= 3 ? `Only ${f.seatsAvailable} seats left` : `${f.seatsAvailable} seats`}</Tag>}
         </div>
-
-        {/* Score breakdown toggle */}
-        {f.reasons?.length > 0 && (
-          <button onClick={() => setOpen(o => !o)} style={{ marginTop: 10, fontSize: 13, color: "#2563eb", background: "none", border: "none", cursor: "pointer", padding: 0 }}>
-            {open ? "Hide score breakdown" : "Why this score?"}
-          </button>
-        )}
+        <div style={{ marginTop: 16, display: "flex", alignItems: "center", justifyContent: "space-between", flexWrap: "wrap", gap: 12 }}>
+          <a href={bookingUrl} target="_blank" rel="noopener noreferrer" style={{ display: "inline-block", padding: "8px 20px", fontSize: 13, fontWeight: 600, background: "var(--navy)", color: "var(--white)", borderRadius: 8, textDecoration: "none" }}>Search on Google Flights</a>
+          {f.reasons?.length > 0 && <button onClick={() => setOpen(o => !o)} style={{ fontSize: 13, color: "var(--muted)", background: "none", border: "none", cursor: "pointer", padding: 0, textDecoration: "underline" }}>{open ? "Hide breakdown" : "Why this score?"}</button>}
+        </div>
       </div>
-
-      {/* Score breakdown */}
       {open && f.reasons && (
-        <div style={{ background: "#f8f8f6", borderTop: "1px solid #eee", padding: "12px 24px" }}>
-          <div style={{ fontSize: 12, color: "#888", marginBottom: 8, fontWeight: 500, textTransform: "uppercase", letterSpacing: 0.5 }}>Score factors</div>
+        <div style={{ background: "var(--cream)", borderTop: "1px solid var(--border)", padding: "16px 28px" }}>
+          <div style={{ fontSize: 11, color: "var(--muted)", marginBottom: 10, fontWeight: 500, textTransform: "uppercase", letterSpacing: 0.5 }}>Score breakdown</div>
           <div style={{ display: "flex", flexWrap: "wrap", gap: 8 }}>
-            {f.reasons.map((r, i) => (
-              <span key={i} style={{ fontSize: 12, padding: "3px 10px", borderRadius: 20, background: "#fff", border: "1px solid #e0e0e0", color: "#444" }}>{r}</span>
-            ))}
+            {f.reasons.map((r, i) => <span key={i} style={{ fontSize: 12, padding: "4px 12px", borderRadius: 100, background: "var(--white)", border: "1px solid var(--border)", color: "var(--text)" }}>{r}</span>)}
           </div>
         </div>
       )}
