@@ -10,83 +10,127 @@ const PORT = process.env.PORT || 3001;
 app.use(cors());
 app.use(express.json());
 
-// Health check
 app.get("/api/health", (req, res) => {
   res.json({ status: "ok", time: new Date().toISOString() });
 });
 
-// Main search endpoint
 app.post("/api/search", async (req, res) => {
-  const { origin, destination, departDate, adults = 2, children = 2 } = req.body;
+  const { origin, destination, departDate, returnDate, adults = 2, children = 2, tripType = "return" } = req.body;
 
   if (!origin || !destination || !departDate) {
-    return res.status(400).json({
-      error: "Missing required fields: origin, destination, departDate",
-    });
+    return res.status(400).json({ error: "Missing required fields: origin, destination, departDate" });
   }
 
   try {
     let rawFlights;
+    const hasSerpKey = process.env.SERPAPI_KEY && process.env.SERPAPI_KEY !== "your_key_here";
 
-    // Use real API if key exists, otherwise use mock data
-    if (process.env.AVIATIONSTACK_KEY && process.env.AVIATIONSTACK_KEY !== "your_api_key_here") {
-      rawFlights = await fetchRealFlights(origin, destination, departDate, adults, children);
+    if (hasSerpKey) {
+      console.log("Fetching real flights from Google Flights via SerpApi...");
+      rawFlights = await fetchGoogleFlights({ origin, destination, departDate, returnDate, adults, children, tripType });
     } else {
-      console.log("No API key found — using mock flight data");
+      console.log("No SerpApi key — using mock data");
       rawFlights = getMockFlights(origin, destination, departDate);
     }
 
-    const rankedFlights = scoreFlights(rawFlights);
+    const ranked = scoreFlights(rawFlights);
 
     res.json({
       searchId: Date.now().toString(),
       origin,
       destination,
       departDate,
-      passengers: { adults, children },
+      returnDate,
+      tripType,
+      passengers: { adults: parseInt(adults), children: parseInt(children) },
       fetchedAt: new Date().toISOString(),
-      usingMockData: !process.env.AVIATIONSTACK_KEY || process.env.AVIATIONSTACK_KEY === "your_api_key_here",
-      results: rankedFlights,
+      usingMockData: !hasSerpKey,
+      results: ranked,
     });
   } catch (err) {
     console.error("Search error:", err.message);
-    res.status(503).json({
-      error: "Flight search failed. Please try again.",
-      detail: err.message,
-    });
+    res.status(503).json({ error: "Flight search failed. Please try again.", detail: err.message });
   }
 });
 
-// Real API fetch (used when AVIATIONSTACK_KEY is set)
-async function fetchRealFlights(origin, destination, date, adults, children) {
+async function fetchGoogleFlights({ origin, destination, departDate, returnDate, adults, children, tripType }) {
   const fetch = require("node-fetch");
-  const url = `http://api.aviationstack.com/v1/flights?access_key=${process.env.AVIATIONSTACK_KEY}&dep_iata=${origin}&arr_iata=${destination}&flight_date=${date}`;
 
+  const params = new URLSearchParams({
+    engine: "google_flights",
+    departure_id: origin,
+    arrival_id: destination,
+    outbound_date: departDate,
+    currency: "USD",
+    hl: "en",
+    adults: adults.toString(),
+    children: children.toString(),
+    type: tripType === "return" ? "1" : "2",
+    api_key: process.env.SERPAPI_KEY,
+  });
+
+  if (tripType === "return" && returnDate) {
+    params.set("return_date", returnDate);
+  }
+
+  const url = `https://serpapi.com/search.json?${params.toString()}`;
   const response = await fetch(url);
-  if (!response.ok) throw new Error(`API returned ${response.status}`);
+  if (!response.ok) throw new Error(`SerpApi returned ${response.status}`);
 
   const data = await response.json();
-  if (!data.data || data.data.length === 0) return getMockFlights(origin, destination, date);
 
-  // Normalise Aviationstack response to our format
-  return data.data.map((f) => {
-    const depTime = f.departure?.scheduled || "";
-    const depHour = depTime ? new Date(depTime).getHours() : 12;
+  const flights = [
+    ...(data.best_flights || []),
+    ...(data.other_flights || []),
+  ];
+
+  if (!flights.length) {
+    console.log("No flights from SerpApi, falling back to mock");
+    return getMockFlights(origin, destination, departDate);
+  }
+
+  return flights.map((f) => {
+    const leg = f.flights?.[0] || {};
+    const depTime = leg.departure_airport?.time || "";
+    const depHour = depTime ? parseInt(depTime.split(":")[0]) : 12;
+    const airline = leg.airline || "Unknown";
+
+    // Baggage: SerpApi returns carry_on_baggage and checked_bags
+    const checkedBags = f.extensions?.includes("Checked baggage included") ||
+                        f.extensions?.includes("1 checked bag") ||
+                        f.layovers?.length === 0;
+
+    const baggageIncluded = checkedBags;
+    const baggageDetails = f.extensions?.join(" · ") || "Check airline website for baggage details";
+
+    // Seat policy lookup
+    const seatPolicies = {
+      "El Al": true, "Lufthansa": true, "British Airways": true, "Emirates": true,
+      "Vueling": false, "EasyJet": false, "Ryanair": false, "Wizz Air": false,
+    };
+
+    const totalPrice = f.price || 0;
+    const pax = parseInt(adults) + parseInt(children);
+    const pricePerAdult = pax > 0 ? Math.round(totalPrice / pax) : totalPrice;
+    const pricePerChild = Math.round(pricePerAdult * 0.75);
+
     return {
-      airline: f.airline?.name || "Unknown",
-      flightNumber: f.flight?.iata || "",
+      airline,
+      flightNumber: leg.flight_number || "",
       origin,
       destination,
-      departureTime: depTime,
-      arrivalTime: f.arrival?.scheduled || "",
+      departureTime: depTime ? `${departDate}T${depTime}:00` : `${departDate}T12:00:00`,
+      arrivalTime: leg.arrival_airport?.time ? `${departDate}T${leg.arrival_airport.time}:00` : "",
       departureHour: depHour,
-      durationMinutes: 0,
-      stops: 0,
-      pricePerAdult: 150,      // Aviationstack free tier has no pricing — use scoring neutral
-      pricePerChild: 120,
-      totalPrice: (150 * adults) + (120 * children),
-      baggageIncluded: true,   // Unknown on free tier — assume included
-      baggageDetails: "Check airline website for baggage details",
+      durationMinutes: f.total_duration || 0,
+      stops: f.flights ? f.flights.length - 1 : 0,
+      stopCity: f.layovers?.[0]?.name || null,
+      pricePerAdult,
+      pricePerChild,
+      totalPrice,
+      baggageIncluded,
+      baggageDetails,
+      seatsTogether: seatPolicies[airline] ?? null,
       seatsAvailable: null,
     };
   });
