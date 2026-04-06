@@ -38,13 +38,13 @@ export default function SearchForm({ onSearch, loading }) {
           <div>
             <label style={lbl}>Departure</label>
             <input style={{...inp,colorScheme:"dark"}} type="date" value={departDate} onChange={e=>setDepartDate(e.target.value)}/>
-            <FlexDates baseDate={departDate} selectedDate={departDate} onSelect={setDepartDate} label="outbound"/>
+            <FlexDates baseDate={departDate} selectedDate={departDate} onSelect={setDepartDate} origin={origin} destination={destination} label="outbound"/>
           </div>
           {tripType==="return"&&(
             <div>
               <label style={lbl}>Return</label>
               <input style={{...inp,colorScheme:"dark"}} type="date" value={returnDate} onChange={e=>setReturnDate(e.target.value)}/>
-              <FlexDates baseDate={returnDate} selectedDate={returnDate} onSelect={setReturnDate} label="return"/>
+              <FlexDates baseDate={returnDate} selectedDate={returnDate} onSelect={setReturnDate} origin={destination} destination={origin} label="return"/>
             </div>
           )}
         </div>
@@ -78,3 +78,4 @@ export default function SearchForm({ onSearch, loading }) {
     </div>
   )
 }
+
